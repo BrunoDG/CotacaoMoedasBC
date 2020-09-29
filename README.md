@@ -7,7 +7,10 @@ O gerente da empresa que te contratou te passou o link do banco central (https:/
 
 Neste momento, o que eles precisam é um programa que receba uma data no formato YYYYMMDD via terminal e exiba na saída uma linha com as seguintes informações separadas por vírgula:
 
-o símbolo da moeda com menor cotação,
-o nome do país de origem da moeda e
-o valor da cotação desta moeda frente ao dólar na data especificada. Caso não haja cotação no dia especificado o caracter x deve ser impresso na tela.
+- o símbolo da moeda com menor cotação,
+- o nome do país de origem da moeda e
+- o valor da cotação desta moeda frente ao dólar na data especificada. 
+
+Caso não haja cotação no dia especificado o caracter x deve ser impresso na tela.
+
 Escreva um programa que atenda aos requisitos acima.

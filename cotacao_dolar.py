@@ -1,5 +1,7 @@
 import json
 import requests
+
+from json import JSONEncoder
 from datetime import datetime
 
 def limpa_conteudo(content):
@@ -10,15 +12,31 @@ def limpa_conteudo(content):
     content = content.replace('/>    <content', '/> <content')
     return content
 
+def json_return(obj):
+    objeto = json.dumps(obj, sort_keys=True, indent=4, cls=CodificaMoeda)
+    return objeto
+
 def json_print(obj):
-    text = json.dumps(obj, sort_keys=True, indent=4)
+    text = json.dumps(obj, sort_keys=True, indent=4, cls=CodificaMoeda)
     print(text)
 
-def organiza_data(self, data):
+def organiza_data(data):
     dataAntiga = data
     objetoData = datetime.strptime(dataAntiga, '%Y%m%d')
     novaData = objetoData.strftime('%m-%d-%Y')
     return novaData
+
+def organiza_cotacao(mo):
+    return mo.cotacaoCompra
+
+def print_moeda(codigo, nome, cotacao):
+    print ('Codigo: ' + codigo + 
+    ', Moeda: ' + nome + 
+    ', Cotacao de compra: ' + cotacao)
+
+class CodificaMoeda(JSONEncoder):
+    def default(self, o):
+        return o.__dict__
 
 class AcessarBacen:
 
@@ -51,38 +69,12 @@ class AcessarBacen:
 
 class Moeda:
 
-    def __init__(self, codigo, nome, tipo, cotacaoCompra, paridadeCompra, cotacaoVenda, paridadeVenda):
-        self.codigo = codigo
+    def __init__(self, simbolo, nome, tipo, cotacaoCompra, cotacaoVenda):
+        self.simbolo = simbolo
         self.nome = nome
         self.tipo = tipo
         self.cotacaoCompra = cotacaoCompra
-        self.paridadeCompra = paridadeCompra
         self.cotacaoVenda = cotacaoVenda
-        self.paridadeVenda = paridadeVenda
-        self.precoCompra = None
-        self.precoVenda = None
-
-    def set_preco_usd(self, compra, venda):
-        self.precoCompra = compra
-        self.precoVenda = venda        
-
-    def print_moeda(self, codigo):
-        print ('Codigo: ' + self.codigo + 
-        ' | Moeda: ' + self.nome + 
-        ' | Cotacao de compra: ' + self.compra + 
-        ' | Cotacao de venda: ' + self.venda)
-    
-    def calcula_moeda(self, codigo, compraUSD, vendaUSD):
-        if self.tipo == 'A':
-            # Codigo para moeda tipo A, cuja paridade é expressa em quantidade de moeda por uma unidade de dólar
-            self.precoCompra = self.paridadeCompra / self.precoCompra
-            self.precoVenda = self.paridadeVenda / self.precoVenda
-            return
-        elif (self.tipo == 'B'):
-            # Código para moeda tipo B, cuja paridade é expressa em quantidade de dólar por uma unidade de moeda.
-            self.precoCompra = self.cotacaoCompra
-            self.precoVenda = self.cotacaoVenda
-            return
 
 class Moedas:
     def __init__(self):
@@ -111,14 +103,14 @@ class Cotacao:
 
         def get_cotacao_todas(self, data, moedas):
             cot = limpa_conteudo(self.req.content.decode('utf-8'))
-            moe = Moeda()
+            cotVal = []
             cotacao = []
 
-            for m in moedas:        
+            for m in moedas:      
                 parameters = {
                     # Estranho, mas a API do Bacen só permite envio de mensagens com string explícita.
                     # Não é a melhor das soluções, mas...
-                    '@moeda': '\'' + m + '\'',
+                    '@moeda': '\'' + m['simbolo'] + '\'',
                     '@dataCotacao': '\'' + data + '\'',
                     'format': 'json',
                     'top': '100',
@@ -126,36 +118,41 @@ class Cotacao:
 
                 cot = requests.get('https://olinda.bcb.gov.br/olinda/servico/PTAX/versao/v1/odata/CotacaoMoedaDia(moeda=@moeda,dataCotacao=@dataCotacao)', params=parameters)
                 cot_json = cot.json()
-                if (m == 'USD'):
-                    moe.set_preco_usd(cot_json[value][4]['cotacaoCompra'],cot_json[value][4]['cotacaoVenda'])
-                cotacao.append(cot_json['value'])
+                cotVal.append(cot_json['value'])
+
+                for n in range(len(cotVal)):
+                    for m in range(len(cotVal[n])):
+                        if (cotVal[n][m]['tipoBoletim'] == 'Fechamento PTAX'):
+                            cotacao.append(cotVal[n][m])
 
             return cotacao
-        
-        #def get_moeda_mais_barata(self):
 
 
 dataCotacao = input("Por favor digite a data da cotacao desejada: ")
+
+dataCotacao = organiza_data(dataCotacao)
 
 print('\nData da Cotacao: ' + dataCotacao + '\n')
 
 moedas = Moedas()
 cotacao = Cotacao()
+
+moe = []
 coins = []
+cot = []
 
 coins = moedas.get_moedas()
 cot = cotacao.get_cotacao_todas(dataCotacao, coins)
 
-cotDia = []
-coinCheap = []
+if (len(cot) == 0):
+        print("X")
+else:
+    for m in range(len(coins)):
+        if (coins[m]['simbolo'] != 'USD'):
+            coin = Moeda(coins[m]['simbolo'], coins[m]['nomeFormatado'], coins[m]['tipoMoeda'], cot[m]['cotacaoCompra'], cot[m]['cotacaoVenda'])
+            moe.append(coin)
 
-for c in range(len(coins)):
-    if (str(cot[c]) == None):
-        cotDia.append("Moeda: " + coins[c] + " | X")
-    else:    
-        cotDia.append("Moeda: " + coins[c] + " | " + cot[c])
+    moe.sort(key=organiza_cotacao)
+    md = moe[0]
 
-
-
-json_print(cotDia)
-
+    print_moeda(md.simbolo, md.nome, str(md.cotacaoCompra))
