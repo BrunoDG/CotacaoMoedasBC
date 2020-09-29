@@ -1,5 +1,24 @@
 import json
 import requests
+from datetime import datetime
+
+def limpa_conteudo(content):
+    fix = {'&lt;': '<', '&gt;': '>'}
+    for key, value in fix.items():
+        content = content.replace(key, value)
+    content = content.replace('\r\n', '')
+    content = content.replace('/>    <content', '/> <content')
+    return content
+
+def json_print(obj):
+    text = json.dumps(obj, sort_keys=True, indent=4)
+    print(text)
+
+def organiza_data(self, data):
+    dataAntiga = data
+    objetoData = datetime.strptime(dataAntiga, '%Y%m%d')
+    novaData = objetoData.strftime('%m-%d-%Y')
+    return novaData
 
 class AcessarBacen:
 
@@ -30,19 +49,8 @@ class AcessarBacen:
             except requests.ConnectionError:
                 continue
 
-def CleanContent(content):
-    fix = {'&lt;': '<', '&gt;': '>'}
-    for key, value in fix.items():
-        content = content.replace(key, value)
-    content = content.replace('\r\n', '')
-    content = content.replace('/>    <content', '/> <content')
-    return content
-
-def json_print(obj):
-    text = json.dumps(obj, sort_keys=True, indent=4)
-    print(text)
-
 class Moeda:
+
     def __init__(self, codigo, nome, tipo, cotacaoCompra, paridadeCompra, cotacaoVenda, paridadeVenda):
         self.codigo = codigo
         self.nome = nome
@@ -51,6 +59,12 @@ class Moeda:
         self.paridadeCompra = paridadeCompra
         self.cotacaoVenda = cotacaoVenda
         self.paridadeVenda = paridadeVenda
+        self.precoCompra = None
+        self.precoVenda = None
+
+    def set_preco_usd(self, compra, venda):
+        self.precoCompra = compra
+        self.precoVenda = venda        
 
     def print_moeda(self, codigo):
         print ('Codigo: ' + self.codigo + 
@@ -58,12 +72,16 @@ class Moeda:
         ' | Cotacao de compra: ' + self.compra + 
         ' | Cotacao de venda: ' + self.venda)
     
-    def calcula_moeda(self, codigo):
+    def calcula_moeda(self, codigo, compraUSD, vendaUSD):
         if self.tipo == 'A':
             # Codigo para moeda tipo A, cuja paridade é expressa em quantidade de moeda por uma unidade de dólar
+            self.precoCompra = self.paridadeCompra / self.precoCompra
+            self.precoVenda = self.paridadeVenda / self.precoVenda
             return
         elif (self.tipo == 'B'):
             # Código para moeda tipo B, cuja paridade é expressa em quantidade de dólar por uma unidade de moeda.
+            self.precoCompra = self.cotacaoCompra
+            self.precoVenda = self.cotacaoVenda
             return
 
 class Moedas:
@@ -71,21 +89,16 @@ class Moedas:
         self.query_url = 'https://olinda.bcb.gov.br/olinda/servico/PTAX/versao/v1/odata'
         acesso = AcessarBacen(self.query_url)
         self.req = acesso.getURL()
-        self.moedas = CleanContent(self.req.content.decode('utf-8'))
+        self.moedas = limpa_conteudo(self.req.content.decode('utf-8'))
 
     def get_moedas(self):
-        coins = CleanContent(self.req.content.decode('utf-8'))
+        coins = limpa_conteudo(self.req.content.decode('utf-8'))
         parameters = {
             'format': 'json',
             'top': '100',
         }
         coins = requests.get('https://olinda.bcb.gov.br/olinda/servico/PTAX/versao/v1/odata/Moedas', params=parameters)
-        coins_json = coins.json()['value']
-
-        moedas = []
-        for d in coins_json:
-            simbolo = d['simbolo']
-            moedas.append(simbolo)
+        moedas = coins.json()['value']
         
         return moedas
 
@@ -94,11 +107,11 @@ class Cotacao:
             self.query_url = 'https://olinda.bcb.gov.br/olinda/servico/PTAX/versao/v1/odata'
             acesso = AcessarBacen(self.query_url)
             self.req = acesso.getURL()
-            self.cotacao = CleanContent(self.req.content.decode('utf-8'))
+            self.cotacao = limpa_conteudo(self.req.content.decode('utf-8'))
 
         def get_cotacao_todas(self, data, moedas):
-            cot = CleanContent(self.req.content.decode('utf-8'))
-            
+            cot = limpa_conteudo(self.req.content.decode('utf-8'))
+            moe = Moeda()
             cotacao = []
 
             for m in moedas:        
@@ -111,33 +124,16 @@ class Cotacao:
                     'top': '100',
                 }
 
-                #print(parameters)
                 cot = requests.get('https://olinda.bcb.gov.br/olinda/servico/PTAX/versao/v1/odata/CotacaoMoedaDia(moeda=@moeda,dataCotacao=@dataCotacao)', params=parameters)
                 cot_json = cot.json()
+                if (m == 'USD'):
+                    moe.set_preco_usd(cot_json[value][4]['cotacaoCompra'],cot_json[value][4]['cotacaoVenda'])
                 cotacao.append(cot_json['value'])
 
-            cotUSD = []
+            return cotacao
+        
+        #def get_moeda_mais_barata(self):
 
-            cotUSD.insert(0, cotacao[9][4]['cotacaoCompra'])
-            cotUSD.insert(1, cotacao[9][4]['cotacaoVenda'])
-
-            ct = []
-            n = 0
-
-            for n in range(len(cotacao)):                
-                if (cotacao[n][4]["tipoBoletim"] == "Fechamento PTAX"):
-                    if (n == 9):
-                        cotUSDCom = cotacao[n][4]['cotacaoCompra']
-                        cotUSDVen = cotacao[n][4]['cotacaoVenda']
-                    else: 
-                        # Se a moeda for o Iene, temos que multiplicar por 100, já que a medida do Iene é diferente das outras moedas
-                        # Ou seja: 1 USD = 100 JPY
-                        cotUSDCom = cotacao[n][4]['cotacaoCompra'] * cotUSD[0]
-                        cotUSDVen = cotacao[n][4]['cotacaoVenda'] * cotUSD[1]
-                    
-                    ct.append("Cotacao de Compra: " + str(cotUSDCom) + " | Cotacao de Venda: " + str(cotUSDVen))
-
-            return ct
 
 dataCotacao = input("Por favor digite a data da cotacao desejada: ")
 
@@ -158,6 +154,7 @@ for c in range(len(coins)):
         cotDia.append("Moeda: " + coins[c] + " | X")
     else:    
         cotDia.append("Moeda: " + coins[c] + " | " + cot[c])
+
 
 
 json_print(cotDia)
