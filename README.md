@@ -10,7 +10,7 @@ Neste momento, o que eles precisam é um programa que receba uma data no formato
 - o símbolo da moeda com menor cotação,
 - o nome do país de origem da moeda e
 - o valor da cotação desta moeda frente ao dólar na data especificada. 
-
+- 
 Caso não haja cotação no dia especificado o caracter x deve ser impresso na tela.
 
 Escreva um programa que atenda aos requisitos acima.
