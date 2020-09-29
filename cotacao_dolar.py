@@ -132,7 +132,7 @@ dataCotacao = input("Por favor digite a data da cotacao desejada: ")
 
 dataCotacao = organiza_data(dataCotacao)
 
-print('\nData da Cotacao: ' + dataCotacao + '\n')
+print('\nAguarde, carregando informações...\n')
 
 moedas = Moedas()
 cotacao = Cotacao()
